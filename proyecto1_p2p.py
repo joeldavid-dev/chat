@@ -11,9 +11,13 @@ from Crypto.PublicKey import RSA
 from Crypto.Protocol.KDF import PBKDF2  # Importamos PBKDF2 para la clave simetrica
 
 
-canal = None
-conexion = None
-PORT = 65432        # Puerto arbitrario no utilizado
+canal_host = None
+canal_guest = None
+conexion_host = None
+conexion_guest = None
+host_ip = None
+PORT_HOST = 65432           # Puerto arbitrario no utilizado
+PORT_GUEST = 65433          # Puerto arbitrario no utilizado
 
 # ========================================================================================
 # Funciones criptográficas
@@ -96,28 +100,26 @@ def obtenerIP():
 
 
 def recibir_msg():
-    global conexion, llave_privada, clave_simetrica
+    global conexion_host, conexion_guest, llave_privada, clave_simetrica, isHost
+    # Selecciona que canal escuchar, dependiendo del modo en que se
+    # ejecuta el programa. Si es host, entonces debe escuchar el canal que creó
+    # guest y viceversa.
+    if isHost:
+        conexion = conexion_guest
+    else:
+        conexion = conexion_host
+
     while True:
         try:
             if conexion:
-                # Recibir paquete
-                #paquete = conexion.recv(1024)
-                #received_data = json.loads(paquete)
-                # Desempaquetar datos
+                # Recibir datos
                 crypt_msg_asym = conexion.recv(1024)
-                conexion.sendall(b"ok")
-                print('\nC asimétrico recibido: ',crypt_msg_asym)
-                
+                print('\nC asimétrico recibido: ',crypt_msg_asym)        
                 nonce = conexion.recv(1024)
-                conexion.sendall(b"ok")
                 print('\nNonce recibido: ',nonce)
-
                 tag = conexion.recv(1024)
-                conexion.sendall(b"ok")
                 print('\nTag recibido: ',tag)
-
                 firma = conexion.recv(1024)
-                conexion.sendall(b"ok")
                 print('\nFirma recibida: ',firma)
 
                 system_msg('Mensaje recibido')
@@ -136,8 +138,16 @@ def recibir_msg():
             break 
 
 def enviar_msg():
+    global conexion_host, conexion_guest, clave_simetrica, llaveP_interloc, isHost
+    # Selecciona que canal escuchar, dependiendo del modo en que se
+    # ejecuta el programa. Si es host, entonces debe escuchar el canal que creó
+    # guest y viceversa.
+    if isHost:
+        conexion = conexion_host
+    else:
+        conexion = conexion_guest
+
     # Descifrado y creación de firma
-    global conexion, clave_simetrica, llaveP_interloc
     mensaje = message_entry.get()
     my_msg(mensaje)
     crypt_msg_sym, nonce, tag = symmetric_encrypt(mensaje, clave_simetrica)
@@ -147,23 +157,15 @@ def enviar_msg():
 
     firma = b"firma"
 
-    # Empaquetar datos con el formato json
-    #paquete = json.dumps({
-    #        'cripto': crypt_msg_asym.decode(),
-    #        'nonce': nonce.decode(),
-    #        'tag': tag.decode(),
-    #        'firma': firma.decode()
-    #    })
-
-    # Enviando el paquete
+    # Enviando los datos. Se incluyó un retraso entre cada envío para
+    # evitar errores de comunicación.
     conexion.sendall(crypt_msg_asym)
-    confirm = conexion.recv(1024)
+    time.sleep(0.1)
     conexion.sendall(nonce)
-    confirm = conexion.recv(1024)
+    time.sleep(0.1)
     conexion.sendall(tag)
-    confirm = conexion.recv(1024)
+    time.sleep(0.1)
     conexion.sendall(firma)
-    confirm = conexion.recv(1024)
     
     system_msg('Mensaje enviado')
 
@@ -173,28 +175,36 @@ def enviar_msg():
     print('\nTag: ',tag)
     print('\nFirma: ',firma)
 
-    
 
 # Función que contiene las ejecuciones iniciales para establecer la conexión
-# desde el punto de vista del host.
-def host_communication(HOST, PORT):
-    global conexion, canal, llave_publica, llaveP_interloc, clave_simetrica
+# desde el punto de vista de host.
+def host_communication():
+    global conexion_host, conexion_guest, canal_host, host_ip, PORT_HOST, PORT_GUEST, llave_publica, llaveP_interloc, clave_simetrica
+    
+    # Creación del canal host
     # Crear un objeto socket TCP/IP
-    canal = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    canal_host = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Vincular el socket al host y al puerto
-    canal.bind((HOST, PORT))    
+    canal_host.bind((host_ip, PORT_HOST))    
     # Escuchar conexiones entrantes
-    canal.listen()
-    system_msg('Conversación iniciada. Esperando interlocutor...')
+    canal_host.listen()
+    system_msg('Canal host iniciado. Esperando interlocutor...')
     # Aceptar conexiones entrantes
-    conexion, addr = canal.accept()
-    system_msg('Conexión establecida con: '+ addr[0])
+    conexion_host, addr = canal_host.accept()
+    system_msg('Conexión host establecida con: '+ addr[0])
+
+    # Creación del canal guest
+    # Crear un objeto socket TCP/IP
+    conexion_guest = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Conectar al servidor
+    conexion_guest.connect((addr[0], PORT_GUEST))
+    system_msg('Conexión guest establecida con: '+ addr[0])
 
     # Enviar mi llave pública
-    conexion.sendall(llave_publica)
+    conexion_host.sendall(llave_publica)
     system_msg('Llave pública compartida con el interlocutor')
     # Recibir llave pública
-    llaveP_interloc = conexion.recv(1024)
+    llaveP_interloc = conexion_guest.recv(1024)
     print('\n Llave publica recibida:',llaveP_interloc.decode())
     system_msg('Llave pública del interlocutor recibida')
     # Cifra la clave simetrica (asimetrico) con la llave publica del receptor
@@ -202,11 +212,11 @@ def host_communication(HOST, PORT):
     # Envio del secreto al guest
     print('\nSecreto enviado:', secreto)
     system_msg('Llave simétrica cifrada con la llave pública del interlocutor (secreto)')
-    conexion.sendall(secreto)
+    conexion_host.sendall(secreto)
     system_msg('Secreto compartido con el interlocutor')
 
     # Confirmación de conexión verificada
-    confirm = conexion.recv(1024)
+    confirm = conexion_guest.recv(1024)
     if confirm == b"confirmado":
         # Inicio de la comunicación
         system_msg('Conexión verificada. Iniciando hilo de recepción de datos...')
@@ -214,28 +224,42 @@ def host_communication(HOST, PORT):
         recibir_thread = threading.Thread(target=recibir_msg)
         recibir_thread.start()
     else:
-        system_msg('Conexión no verificada. Cancelando comunicación')
-        conexion.close()
+        system_msg('Conexión no verificada')
+        cerrar_conexiones()
 
 # Función que contiene las ejecuciones iniciales para establecer la conexión
 # desde el punto de vista del invitado.
-def guest_communication(HOST, PORT):
-    global conexion, llave_publica, llaveP_interloc, clave_simetrica, temp_password
+def guest_communication():
+    global conexion_host, conexion_guest, canal_guest, host_ip, mi_ip, PORT_HOST, PORT_GUEST, llave_publica, llaveP_interloc, clave_simetrica, temp_password
+    
+    # Creación del canal host
     # Crear un objeto socket TCP/IP
-    conexion = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    conexion_host = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Conectar al servidor
-    conexion.connect((HOST, PORT))
-    system_msg('Conexión establecida con: '+ HOST)
+    conexion_host.connect((host_ip, PORT_HOST))
+    system_msg('Conexión host establecida con: '+ host_ip)
+
+    # Creación del canal guest
+    # Crear un objeto socket TCP/IP
+    canal_guest = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Vincular el socket al host y al puerto
+    canal_guest.bind((mi_ip, PORT_GUEST))    
+    # Escuchar conexiones entrantes
+    canal_guest.listen()
+    system_msg('Canal guest iniciado. Esperando interlocutor...')
+    # Aceptar conexiones entrantes
+    conexion_guest, addr = canal_guest.accept()
+    system_msg('Conexión guest establecida con: '+ addr[0])
 
     # Recibir llave publica del interlocutor
-    llaveP_interloc = conexion.recv(1024)
+    llaveP_interloc = conexion_host.recv(1024)
     print('\n Llave publica recibida:',llaveP_interloc.decode())
     system_msg('Llave pública del interlocutor recibida')
     # Enviar mi llave pública
-    conexion.sendall(llave_publica)
+    conexion_guest.sendall(llave_publica)
     system_msg('Llave pública compartida con el interlocutor')
     # Recibir secreto
-    secreto = conexion.recv(1024)
+    secreto = conexion_host.recv(1024)
     print('\nSecreto recibido:', secreto)
     system_msg('Secreto recibido')
     # Descifrar secreto con mi llave privada
@@ -248,36 +272,25 @@ def guest_communication(HOST, PORT):
     temp_simetrica = generate_symmetric_key(temp_password)
     if temp_simetrica == clave_simetrica:
         # Enviar la confirmación
-        conexion.sendall("confirmado".encode())
+        conexion_guest.sendall("confirmado".encode())
         # Iniciar conversación
         send_message_button.config(state=tk.NORMAL)
-        system_msg('Conexión confirmada. Iniciando hilo de recepción de datos...')
+        system_msg('Conexión verificada. Iniciando hilo de recepción de datos...')
         recibir_thread = threading.Thread(target=recibir_msg)
         recibir_thread.start()
     else:
-        system_msg('Conexión no verificada. Cancelando comunicación')
-        conexion.close()
+        system_msg('Conexión no verificada')
+        cerrar_conexiones()
 
-def iniciarComunicacion():
-    global escuchando
-    while True:
-        if escuchando:
-            msj = escucharMensaje()
-        else:
-            msj = input('>>> ')
-            enviarMensaje(msj)
-            
-        if msj == '*cambio':
-            escuchando = not escuchando
-        elif msj == '*fin':
-            break
-
-# Función para desconectarse del servidor
-def cerrar_conexion():
-    global conexion
-    if conexion:
-        conexion.close()
-
+def cerrar_conexiones():
+    global conexion_host, conexion_guest, canal_host, canal_guest, isHost
+    system_msg('Comunicación cancelada. debe reiniciar para crear una nueva conversación o unirse a una')
+    conexion_host.close()
+    conexion_guest.close()
+    if isHost:
+        canal_host.close()
+    else:
+        canal_guest.close()
 # ========================================================================================
 # Ejecución principal
 # ========================================================================================
@@ -287,14 +300,14 @@ clave_simetrica = b''
 llave_privada = b''
 llave_publica = b''
 llaveP_interloc= b'' # Llave publica del interlocutor
-mi_IP = obtenerIP()
+mi_ip = obtenerIP()
 
 ventana = tk.Tk()
 ventana.title("Cliente de Mensajería Segura")
 ventana.resizable(0,0)
 
 # Crear etiquetas para los archivos de claves
-private_key_label = ttk.Label(ventana, text="Mi dirección IP es: "+mi_IP, font=("Arial",12))
+private_key_label = ttk.Label(ventana, text="Mi dirección IP es: "+mi_ip, font=("Arial",12))
 private_key_label.grid(row=0, column=0, columnspan=3)
 
 # Entrada de mensaje
@@ -326,16 +339,17 @@ if isHost:
     system_msg('Clave simetrica generada')
     llave_privada, llave_publica = generate_asymetric_keys()
     system_msg('Llaves asimetricas generadas')
-    HOST = mi_IP        # localhost
-    host_thread = threading.Thread(target=host_communication, args=(HOST, PORT))
+    host_ip = mi_ip       # localhost
+    host_thread = threading.Thread(target=host_communication)
     host_thread.start()
 else:
-    HOST = solicitud('Ingresar IP', "Por favor, ingresa la IP de la conversación a la que deseas unirte")
+    host_ip = solicitud('Ingresar IP', "Por favor, ingresa la IP de la conversación a la que deseas unirte")
+    time.sleep(1)
     temp_password = solicitud("Ingresa la contraseña", "Por favor, ingresa la contraseña de la conversación")
     llave_privada, llave_publica = generate_asymetric_keys()
     system_msg('Llaves asimetricas generadas')
-    invitado_thread = threading.Thread(target=guest_communication, args=(HOST, PORT))
-    invitado_thread.start()
+    guest_thread = threading.Thread(target=guest_communication)
+    guest_thread.start()
 
 
 # Ejecutar el bucle de eventos
