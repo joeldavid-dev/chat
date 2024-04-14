@@ -12,7 +12,7 @@ Invitado:
 1. Obtener mi clave simetrica:
 	- solicitar contraseña
 	- generar clave simetrica con PBKDF
-	- comparar con la recibida y reintentar si falla
+	- comparar clave generada con la recibida y rechazar si no coinciden
 
 3. Para enviar:
 	- Cifrar (simetrico) el mensaje con AES y clave simetrica

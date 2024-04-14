@@ -2,12 +2,12 @@ import socket
 import hashlib
 import time
 import threading
-import base64
-import json
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, scrolledtext, filedialog
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA256
+from Crypto.Signature import pkcs1_15
 from Crypto.Protocol.KDF import PBKDF2  # Importamos PBKDF2 para la clave simetrica
 
 
@@ -64,6 +64,27 @@ def asymmetric_decrypt(ciphertext, private_key):
     plaintext = cipher.decrypt(ciphertext)
     return plaintext
 
+# Función para generar el hash de un mensaje
+def generate_hash(message):
+    hash_object = hashlib.sha256(message.encode())
+    return hash_object.hexdigest()
+
+# Función para generar una firma digital de un mensaje utilizando la clave privada
+def generate_digital_signature(message, private_key):
+    key = RSA.import_key(private_key)
+    h = SHA256.new(message.encode())
+    signature = pkcs1_15.new(key).sign(h)
+    return signature
+
+# Función para verificar la firma digital de un mensaje utilizando la clave pública
+def verify_digital_signature(message, signature, public_key):
+    key = RSA.import_key(public_key)
+    h = SHA256.new(message.encode())
+    try:
+        pkcs1_15.new(key).verify(h, signature)
+        return True
+    except (ValueError, TypeError):
+        return False
 # ========================================================================================
 # Funciones de UI
 # ========================================================================================
@@ -100,7 +121,7 @@ def obtenerIP():
 
 
 def recibir_msg():
-    global conexion_host, conexion_guest, llave_privada, clave_simetrica, isHost
+    global conexion_host, conexion_guest, llave_privada, llaveP_interloc, clave_simetrica, isHost
     # Selecciona que canal escuchar, dependiendo del modo en que se
     # ejecuta el programa. Si es host, entonces debe escuchar el canal que creó
     # guest y viceversa.
@@ -114,7 +135,7 @@ def recibir_msg():
             if conexion:
                 # Recibir datos
                 crypt_msg_asym = conexion.recv(1024)
-                print('\nC asimétrico recibido: ',crypt_msg_asym)        
+                print('\nCripto recibido: ',crypt_msg_asym)        
                 nonce = conexion.recv(1024)
                 print('\nNonce recibido: ',nonce)
                 tag = conexion.recv(1024)
@@ -122,14 +143,20 @@ def recibir_msg():
                 firma = conexion.recv(1024)
                 print('\nFirma recibida: ',firma)
 
-                system_msg('Mensaje recibido')
+                system_msg('<= Mensaje recibido')
 
                 # Desencriptado y verificación de firma
                 crypt_msg_sym = asymmetric_decrypt(crypt_msg_asym, llave_privada)
                 system_msg('Mensaje descifrado con método asimétrico')
                 plaintext = symmetric_decrypt(crypt_msg_sym, nonce, tag, clave_simetrica)
                 system_msg('Mensaje descifrado con método simétrico')
-                new_msg(plaintext)        
+                firma_valida = verify_digital_signature(plaintext, firma, llaveP_interloc)
+
+                if firma_valida:
+                    system_msg('Firma válida. El mensaje es auténtico')
+                    new_msg(plaintext)  
+                else:
+                    system_msg('Firma inválida. Se ha rechazado el mensaje')      
             else:
                 print('conexion terminada')
                 break
@@ -138,7 +165,7 @@ def recibir_msg():
             break 
 
 def enviar_msg():
-    global conexion_host, conexion_guest, clave_simetrica, llaveP_interloc, isHost
+    global conexion_host, conexion_guest, clave_simetrica, llave_privada, llaveP_interloc, isHost
     # Selecciona que canal escuchar, dependiendo del modo en que se
     # ejecuta el programa. Si es host, entonces debe escuchar el canal que creó
     # guest y viceversa.
@@ -154,8 +181,8 @@ def enviar_msg():
     system_msg('Mensaje cifrado con método simétrico')
     crypt_msg_asym = asymmetric_encrypt(crypt_msg_sym, llaveP_interloc)
     system_msg('Mensaje cifrado con método asimétrico')
-
-    firma = b"firma"
+    firma = generate_digital_signature(mensaje, llave_privada)
+    system_msg('Firma generada')
 
     # Enviando los datos. Se incluyó un retraso entre cada envío para
     # evitar errores de comunicación.
@@ -167,10 +194,10 @@ def enviar_msg():
     time.sleep(0.1)
     conexion.sendall(firma)
     
-    system_msg('Mensaje enviado')
+    system_msg('=> Mensaje enviado')
 
     # Impresiones para debug
-    print('\nC asimétrico: ',crypt_msg_asym)
+    print('\nCripto: ',crypt_msg_asym)
     print('\nNonce: ',nonce)
     print('\nTag: ',tag)
     print('\nFirma: ',firma)
