@@ -1,6 +1,6 @@
 import socket
-import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog, messagebox
+from tkinter import *
+from tkinter import ttk
 import multiprocessing
 
 main_frame = None
@@ -56,6 +56,9 @@ def iniciarComunicacion():
 # =======================================================================
 # Modo de conexion y ejecuciones iniciales
 # =======================================================================
+root = Tk()
+frm = ttk.Frame(root, padding=10)
+
 # Obtener el nombre de host de la máquina local
 hostname = socket.gethostname()
 
@@ -90,3 +93,8 @@ elif modoConexion == 'u':
 
 else:
     print('Opción no valida. Ejecución terminada.')
+
+frm.grid()
+ttk.Label(frm, text="Hello World!").grid(column=0, row=0)
+ttk.Button(frm, text="Quit", command=root.destroy).grid(column=1, row=0)
+root.mainloop()
