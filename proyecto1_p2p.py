@@ -198,7 +198,7 @@ def enviar_msg():
     conexion.sendall(firma)
     
     system_msg('=> Mensaje enviado')
-    message_entry.delete(0, END)
+    message_entry.delete(0, tk.END)
 
     # Impresiones para debug
     print('\nCripto: ',crypt_msg_asym)
