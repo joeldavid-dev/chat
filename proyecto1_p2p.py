@@ -102,13 +102,18 @@ def solicitud(titulo, mensaje):
     return texto_ingresado
 
 def my_msg(mensaje):
-    msj = '[Yo] '+mensaje+'\n'
+    msj = '[Tú] '+mensaje+'\n'
     received_messages_text.insert(tk.END, msj)
 
 def new_msg(mensaje):
-    msj = '[Interlocutor] '+mensaje+'\n'
+    msj = '[Emisor] '+mensaje+'\n'
     received_messages_text.insert(tk.END, msj)
 
+def adaptar_colores(exito):
+    if exito:
+        ventana.configure(bg='lightgreen')
+    else:
+        ventana.configure(bg='red')
 # ========================================================================================
 # Funciones de conexión
 # ========================================================================================
@@ -252,12 +257,14 @@ def host_communication():
     confirm = conexion_guest.recv(1024)
     if confirm == b"confirmado":
         # Inicio de la comunicación
+        adaptar_colores(True)
         system_msg('Conexión verificada. Iniciando hilo de recepción de datos...')
         send_message_button.config(state=tk.NORMAL)
         end_communication_button.config(state=tk.NORMAL)
         recibir_thread = threading.Thread(target=recibir_msg)
         recibir_thread.start()
     else:
+        adaptar_colores(False)
         system_msg('Conexión no verificada')
         cerrar_conexiones()
 
@@ -310,12 +317,14 @@ def guest_communication():
         # Enviar la confirmación
         conexion_guest.sendall("confirmado".encode())
         # Iniciar conversación
+        adaptar_colores(True)
         send_message_button.config(state=tk.NORMAL)
         end_communication_button.config(state=tk.NORMAL)
         system_msg('Conexión verificada. Iniciando hilo de recepción de datos...')
         recibir_thread = threading.Thread(target=recibir_msg)
         recibir_thread.start()
     else:
+        adaptar_colores(False)
         system_msg('Conexión no verificada')
         cerrar_conexiones()
 
