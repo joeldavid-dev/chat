@@ -198,6 +198,7 @@ def enviar_msg():
     conexion.sendall(firma)
     
     system_msg('=> Mensaje enviado')
+    message_entry.delete(0, END)
 
     # Impresiones para debug
     print('\nCripto: ',crypt_msg_asym)
@@ -215,6 +216,7 @@ def host_communication():
     # Crear un objeto socket TCP/IP
     canal_host = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Vincular el socket al host y al puerto
+    print("Creando conexión host desde: ",host_ip, "con el puerto:", PORT_HOST)
     canal_host.bind((host_ip, PORT_HOST))    
     # Escuchar conexiones entrantes
     canal_host.listen()
@@ -227,6 +229,7 @@ def host_communication():
     # Crear un objeto socket TCP/IP
     conexion_guest = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Conectar al servidor
+    print("Creando conexión guest desde: ",addr[0], "con el puerto:", PORT_GUEST)
     conexion_guest.connect((addr[0], PORT_GUEST))
     system_msg('Conexión guest establecida con: '+ addr[0])
 
@@ -267,6 +270,7 @@ def guest_communication():
     # Crear un objeto socket TCP/IP
     conexion_host = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Conectar al servidor
+    print("Creando conexión host desde: ",host_ip, "con el puerto:", PORT_HOST)
     conexion_host.connect((host_ip, PORT_HOST))
     system_msg('Conexión host establecida con: '+ host_ip)
 
@@ -274,6 +278,7 @@ def guest_communication():
     # Crear un objeto socket TCP/IP
     canal_guest = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Vincular el socket al host y al puerto
+    print("Creando conexión guest desde: ",mi_ip, "con el puerto:", PORT_GUEST)
     canal_guest.bind((mi_ip, PORT_GUEST))    
     # Escuchar conexiones entrantes
     canal_guest.listen()
@@ -374,12 +379,12 @@ system_messages_text.grid(row=4, column=0, columnspan=3)
 # Creando la conexión y generar las llaves dependiendo del modo de ejecución.
 isHost = messagebox.askyesno("Modo de ejecución", "¿Deseas crear una nueva conversación?")
 if isHost:
+    host_ip = mi_ip       # Yo soy host
     password = solicitud('Ingresar contraseña', "Por favor, ingresa una contraseña para la conversación")
     clave_simetrica = generate_symmetric_key(password)
     system_msg('Clave simetrica generada')
     llave_privada, llave_publica = generate_asymetric_keys()
     system_msg('Llaves asimetricas generadas')
-    host_ip = mi_ip       # localhost
     host_thread = threading.Thread(target=host_communication)
     host_thread.start()
 else:
