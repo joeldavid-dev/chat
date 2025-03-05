@@ -62,13 +62,13 @@ git clone https://github.com/joeldavid-dev/crypto-chat.git
 
 Crear un entorno virtual, en donde se instalarán los paquetes de Python necesarios:
 ```
-cd .\crypto-chat\
+cd crypto-chat
 python -m venv entorno
 ```
 
 Activar el entorno virtual:
 ```
-.\entorno\Scripts\activate
+source entorno/bin/activate
 ```
 
 Instalar Cryptodome, una dependencia necesaria:
@@ -78,10 +78,19 @@ pip install pycryptodome
 
 Ejecutar el Script:
 ```
-python .\crypto-chat.py
+python crypto-chat.py
 ```
 
 Desactivar el entorno virtual al terminar la ejecución del Script:
 ```
 deactivate
 ```
+
+> [!NOTE] 
+> Es necesario tener instalado TKinter, en la mayoría de los casos ya está instalado, pero si no, puedes instalarlos con los siguientes comandos.
+>
+> Para instalarlo en Debian, Ubuntu o derivados:
+> - sudo apt install python3-tk
+> 
+> Para instalarno en Arch o derivados:
+> - sudo pacman -S tk
